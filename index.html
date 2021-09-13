@@ -1,0 +1,541 @@
+<html>
+	<head>
+		<title>My first three.js app</title>
+		<style>
+		    }
+			body { 
+				text-align: center;
+				margin: 10; 
+			}
+
+			canvas { 
+				background: red;
+				text-align: center;
+				margin: 10; 
+			}
+		</style>
+	</head>
+	<body>
+		<audio id="myAudio">
+		  <source src="bgm.mp3" type="audio/mpeg">
+		</audio>
+
+		<div>
+			<button onclick="playAudio()" type="button">Play Audio</button>
+			<button onclick="pauseAudio()" type="button">Pause Audio</button> 
+		</div>
+
+		<div>
+			<br>cost 100 points to
+			<button onclick="slowDown()" type="button">Slow Down</button>
+		</div>
+
+		<div>
+			<button onclick="removeAll()" type="button">remove All</button>
+		</div>
+
+		<div calss = "right">score: <span id = "score"></span></div>
+		<div calss = "right">level: <span id = "level"></span> of 3</div>
+
+		<canvas class = "right" id = "myCanvas" ></canvas>
+		
+		<canvas class = "right" id = "teCanvas" ></canvas>
+
+		<script src="three.js"></script>
+
+		<script>
+			var collideSound;
+			var clearSound;
+			var loseSound;
+
+			var x = document.getElementById("myAudio"); 
+
+			function playAudio() { 
+			  x.play(); 
+			} 
+
+			function pauseAudio() { 
+			  x.pause(); 
+			} 
+
+			var scene = null;
+			var cube = null;
+			var curPosition = {x:3, y:0};
+			var score = 0;
+			var scoregeo;
+			// var curMat;
+			var delta = 0;
+
+			var curMatrix = [];
+
+			const colors = [
+
+	            {color: 'yellow'},
+	            {color: 'pink'},
+	            {color: 'orange'},
+	            {color: 'red'},
+	            {color: 'blue'},
+	            {color: 'cyan'},
+	            {color: 'purple'},
+
+        	]
+
+        	function sound(src) {
+			  this.sound = document.createElement("audio");
+			  this.sound.src = src;
+			  this.sound.setAttribute("preload", "auto");
+			  this.sound.setAttribute("controls", "none");
+			  this.sound.style.display = "none";
+			  document.body.appendChild(this.sound);
+			  this.play = function(){
+			    this.sound.play();
+			  }
+			  this.stop = function(){
+			    this.sound.pause();
+			  }
+			}
+
+			collideSound = new sound("collide.wav");
+			clearSound = new sound("clearline.wav");
+			bgm = new sound("clearline.wav");
+			loseSound = new sound("lose.wav");
+
+
+			function newTetris() {
+
+				var shape = Math.floor(Math.random() * 7);
+				if (shape === 0) {
+					curMatrix = [
+						[0, 0, 0],
+						[1, 1, 1],
+						[0, 1, 0],
+					];
+				}
+
+				if (shape === 1) {
+					curMatrix =  [
+						[0, 0, 2],
+						[0, 0, 2],
+						[0, 2, 2],
+					];
+				}
+
+				if (shape === 2) {
+					curMatrix =  [
+						[3, 0, 0],
+						[3, 0, 0],
+						[3, 3, 0],
+					];
+				}
+
+				if (shape === 3) {
+					curMatrix =  [
+						[0, 0, 0],
+						[0, 4, 4],
+						[4, 4, 0],
+					];
+				}
+
+				if (shape === 4) {
+					curMatrix =  [
+						[0, 0, 0],
+						[5, 5, 0],
+						[0, 5, 5],
+					];
+				}
+
+				if (shape === 5) {
+					curMatrix =  [
+						[6, 6],
+						[6, 6],
+					];
+				}
+
+				if (shape === 6) {
+					curMatrix =  [
+						[0, 0, 0, 0],
+						[7, 7, 7, 7],
+						[0, 0, 0, 0],
+						[0, 0, 0, 0],
+					];
+				}
+
+			}
+
+			var reachBottom = 0;
+			function handleKeyDown(event) {
+				switch (event.code) {
+					
+					// model selection
+					case "Space": 
+						while(curPosition.y !== 0 ) {
+							moveDown();
+						}
+						// if (checkCollide(playfield, curMatrix))
+					    break;
+					case "KeyW": // select next triangle set
+						camera.position.z -=  100;
+						break;
+					case "KeyS": // select next triangle set
+						camera.position.z +=  100;
+						break;
+					case "KeyA": // select next triangle set
+						camera.position.x -=  100;
+						break;
+					case "KeyD": // select next triangle set
+						camera.position.x +=  100;
+						break;
+					case "KeyQ": // select next triangle set
+						camera.position.y +=  100;
+						break;
+					case "KeyE": // select next triangle set
+						camera.position.y -=  100;
+						break;
+					case "Escape": // select next triangle set
+						camera.position.x =  150;
+						camera.position.y =  0;
+						camera.position.z =  0;
+						break;
+					case "ArrowRight": // select next triangle set
+						moveLeftRight(1);
+						break;
+					case "ArrowLeft": // select previous triangle set
+						moveLeftRight(-1);
+						break;
+					case "ArrowUp": // select next ellipsoid
+						rotate();
+						break;
+					case "ArrowDown": // select previous ellipsoid
+						moveDown();
+						break;
+						
+					// view change
+				} // end switch
+			} // end handleKeyDown
+
+			function moveLeftRight(lr) {
+				var tmp = curPosition.x;
+				curPosition.x += lr;
+				if (checkCollide()) {
+					curPosition.x = tmp;
+				} else {
+					camera2.position.x +=  lr * 10;
+				}
+				
+			}
+			var playfield = [];
+			for (var i = 0; i <= 20; i++) {
+				var row = new Array(10).fill(0);
+				playfield.push(row);
+			}
+
+			function insertCur() {
+				curMatrix.forEach((i, y) => {
+					i.forEach((j, x) => {
+						if (j !== 0) {
+							playfield[y + curPosition.y][x + curPosition.x] = j;
+						}
+					});
+				});
+			}
+
+			
+			function checkCollide(){
+
+				for (var i = 0; i < curMatrix.length; ++i) {
+					for (var j = 0; j < curMatrix[i].length; ++j) {
+						if ((playfield[i + curPosition.y] && playfield[i + curPosition.y][j + curPosition.x]) !== 0 && curMatrix[i][j] > 0) {
+							reachBottom = 1;
+							// console.log(reachBottom);
+							collideSound.play();
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+
+			function moveDown() {
+				curPosition.y++;
+				
+				if (checkCollide()) {
+					curPosition.y--;
+					insertCur();
+					initial();
+					clearLines();
+					camera2.position.x = 50;
+					camera2.position.y = 150;
+					camera2.position.z = -400;
+				} else {
+					camera2.position.y -= 10;
+				}
+				dropCounter = 0;
+			}
+
+			function clearLines() {
+			    let rowCount = 0;
+			    eachRow: for (let y = playfield.length -1; y > 0; y--) {
+			        for (let x = 0; x < playfield[y].length; x++) {
+			            if (playfield[y][x] === 0) {
+			                continue eachRow; // this line is not full
+			            }
+			        }
+			        playfield.splice(y, 1);
+			        const zeros = new Array(10).fill(0)
+			        playfield.unshift(zeros);
+			        y++;
+			        rowCount+=1;
+			        clearSound.play();
+			        
+			    }
+			    score += rowCount * rowCount * 10;
+			    // console.log(score);
+			    document.getElementById('score').innerText = score;
+			}
+
+			function drawboard() {
+				
+				// top left:(-55, 105) top right: (45, 105)
+				// bot left:(-55, -95) bot right: (45, -95) 
+				// x + 50, y - 100
+				const backgeometry = new THREE.BoxGeometry(100,200,30);
+				const backmaterial = new THREE.MeshPhongMaterial( { color: 'gray' } );
+				back = new THREE.Mesh( backgeometry, backmaterial );
+				back.position.x = 45;
+				back.position.y = -105;
+				back.position.z = -520;
+				back.receiveShadow  = true;
+				scene.add( back );
+				camera.lookAt(back.position);
+				// camera.lookAt(0.0,0.0,-500);
+				const botgeometry = new THREE.BoxGeometry(100,10,70);
+				const botmaterial = new THREE.MeshPhongMaterial( { color: 'gray' } );
+				bot = new THREE.Mesh( botgeometry, botmaterial );
+				bot.position.x = 45;
+				bot.position.y = -210;
+				bot.position.z = -520;
+				bot.receiveShadow  = true;
+				scene.add( bot );
+				
+
+				//grid
+				const linematerial = new THREE.LineBasicMaterial({
+					color: 'white'
+				});
+
+				// vertical
+				for (var i = 1; i < 10; i+=1) {
+					const points = [];
+					points.push( new THREE.Vector3( -5 + 10 * i, -5, 0) );
+					points.push( new THREE.Vector3( -5 + 10 * i, -205, 0) );
+					// points.push( new THREE.Vector3( 0, 100, -1100 ) );
+					const linegeometry = new THREE.BufferGeometry().setFromPoints( points );
+					const line = new THREE.Line( linegeometry, linematerial );
+					line.position.z = -504.7;
+					scene.add( line );
+				}
+
+				// parrallel
+				for (var i = 1; i < 20; i+=1) {
+					const points = [];
+					points.push( new THREE.Vector3( -5, -5 - 10 * i, 0) );
+					points.push( new THREE.Vector3( 95, -5 - 10 * i, 0) );
+					// points.push( new THREE.Vector3( 0, 100, -1100 ) );
+					const linegeometry = new THREE.BufferGeometry().setFromPoints( points );
+					const line = new THREE.Line( linegeometry, linematerial );
+					line.position.z = -504.7;
+					scene.add( line );
+				}
+
+			}
+			var light;
+			var light1;
+			function start() {
+				if (scene !== null) clearThree(scene);
+				scene = new THREE.Scene();
+				// scene.add(textGeo);
+				// textGeo.position = back.position;
+				// textGeo.position.y += 150;
+				light = new THREE.AmbientLight(0xffffff, 0.4)
+				scene.add(light);
+
+				light1 = new THREE.PointLight(0xffffff, 0.6)
+				light1.castShadow = true;
+				light1.position.set(0, 0, -400);
+				scene.add(light1);
+				drawboard();
+			}
+
+			function removeAll() {
+				playfield.forEach(i => i.fill(0));
+			}
+
+			function initial() {
+				newTetris();
+				curPosition.y = 0;
+				curPosition.x = 3;
+				if (checkCollide()) {
+					// bgm.stop();
+					loseSound.play();
+					playfield.forEach(i => i.fill(0));
+					score=0;
+					scoreOfLevel = 0;
+					level = 1;
+					// console.log(score);
+					document.getElementById('score').innerText = score;
+				}
+				reachBottom = 0;
+			}
+
+			const camera = new THREE.PerspectiveCamera( 35, 1, 0.1, 3000 );
+			camera.position.x = 150;
+			camera.position.y = 0;
+
+
+			const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('myCanvas'), antialias: true});
+			renderer.shadowMapEnabled = true;
+			renderer.shadowMap.type = THREE.BasicShadowMap;
+			renderer.setSize( 512, 512 );
+
+			const renderer2 = new THREE.WebGLRenderer({canvas: document.getElementById('teCanvas'), antialias: true});
+			renderer2.shadowMapEnabled = true;
+			renderer2.shadowMap.type = THREE.BasicShadowMap;
+			const camera2 = new THREE.PerspectiveCamera( 35, 1, 0.1, 3000 );
+			camera2.position.x = 50;
+			camera2.position.y = 150;
+			camera2.position.z = -400;
+			camera2.lookAt({x: 45, y: -105, z: -520, isVector3: true});
+			
+			renderer2.setSize( 512, 512 );
+
+			var group = null;
+			function drawMatrix(matrix, curPosition) {
+
+				group = new THREE.Group();
+				matrix.forEach((row, y) => {
+					row.forEach((value, x) => {
+						if (value !== 0) {
+							const geometry = new THREE.BoxGeometry(10,10,10);
+							const material = new THREE.MeshPhongMaterial( colors[value - 1] );
+							cube = new THREE.Mesh( geometry, material );
+							cube.position.x = curPosition.x * 10 + x * 10;
+							cube.position.y = curPosition.y * (-10) + y * -10; 
+							cube.position.z = -500;
+							cube.receiveShadow = true;
+							cube .castShadow = true;
+							group.add( cube );
+
+
+							
+						}
+					});
+				});
+				
+				scene.add(group);
+			}
+
+			function rotate() {
+				let tempM = [[]];
+				tempM = curMatrix;
+				// temp = curMatrix.slice(0);
+				
+				for ( var i = 0; i < curMatrix.length; ++i) {
+					for (var j = 0; j < i; ++j) {
+						[ 
+							curMatrix[j][i],
+							curMatrix[i][j],
+						] = [
+							curMatrix[i][j],
+							curMatrix[j][i],
+						];
+					}
+				}
+				curMatrix.reverse();
+				// console.log(curMatrix);
+				// console.log(checkCollide());
+				if (checkCollide()) {
+					curMatrix.reverse();
+					for ( var i = 0; i < curMatrix.length; ++i) {
+						for (var j = 0; j < i; ++j) {
+							[ 
+								curMatrix[j][i],
+								curMatrix[i][j],
+							] = [
+								curMatrix[i][j],
+								curMatrix[j][i],
+							];
+						}
+					}
+				}
+			}
+
+			function clearThree(obj){
+				while(obj.children.length > 0){ 
+					clearThree(obj.children[0])
+					obj.remove(obj.children[0]);
+				}
+				if(obj.geometry) obj.geometry.dispose()
+
+				if(obj.material){ 
+					Object.keys(obj.material).forEach(prop => {
+						if(!obj.material[prop])
+							return         
+						if(obj.material[prop] !== null && typeof obj.material[prop].dispose === 'function')                                  
+						obj.material[prop].dispose()                                                        
+					})
+					obj.material.dispose()
+				}
+			}  
+
+			
+			var dropCounter = 0;
+			var dropInterval = 1000;
+			var level = 1;
+			var lastTime = 0;
+
+			function slowDown() {
+				if (score >= 100) {
+					score -= 100;
+					document.getElementById('score').innerText = score;
+				}
+				
+			}
+			const animate = function (time = 0) {
+				const deltaTime = time - lastTime;
+				lastTime = time;
+
+				dropCounter += deltaTime;
+				if (score < 100) {
+					level = 1;
+					dropInterval = 1000;
+				}
+				if (score >= 100) {
+					level = 2;
+					dropInterval = 500;
+				} 
+
+				if (score >= 200) {
+					level = 3;
+					dropInterval = 250;
+				} 
+
+				document.getElementById('level').innerText = level;
+				if (dropCounter > dropInterval) {
+					moveDown();
+					dropCounter = 0;
+				}
+				requestAnimationFrame( animate );
+				renderer.render( scene, camera );
+				renderer2.render( scene, camera2 );
+				start();
+				drawMatrix(playfield, {x:0, y:0});
+				drawMatrix(curMatrix, curPosition);
+			};
+			initial();
+			start();
+			document.getElementById('score').innerText = score;
+			document.onkeydown = handleKeyDown; // call this when key pressed
+			animate();
+		</script>
+	</body>
+</html>
